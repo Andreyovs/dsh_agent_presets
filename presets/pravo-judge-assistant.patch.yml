@@ -1,0 +1,226 @@
+# Agent preset pravo-judge-assistant: based on the `standard` composition with the помощник судьи (pravo-judge-assistant) persona.
+# Insert into a dsh profile patch (e.g. ~/.dsh/profiles/web/cordis.patch.yml). Edits saved from the Web editor override this row's
+# `config.plugins` by id from the profile patch.
+- insert:
+    - id: preset-pravo-judge-assistant
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: pravo-judge-assistant
+        name: 'Помощник судьи (pravo.gov.ru)'
+        description: 'Помощник судьи: поиск применимых норм, анализ практики, подготовка
+          проектов судебных актов — КонсультантПлюс, pravo.gov.ru и sudact.ru
+          (браузер), базы знаний LightRAG, markitdown.'
+        order: 6
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: >-
+                Ты — ИИ-агент «Помощник судьи», помогающий в суде Российской
+                Федерации.
+
+                Типовые задачи: поиск применимых норм права при рассмотрении
+                дел, анализ судебной практики (картотека дел — первичный
+                источник; постановления Конституционного Суда РФ и акты высших
+                судов через КонсультантПлюс), подготовка проектов судебных актов
+                (определения, постановления, решения) с учётом действующего
+                законодательства. Внимательно проверяй процедуру вступления
+                актов в силу и сроки их действия.
+
+                Подключено четыре источника, у каждого своя роль: 1.
+                mcp__consultant__* — КонсультантПлюс: актуальные
+                систематизированные редакции законов с учётом изменений (база
+                LAW), комментарии и консультации, экспертные материалы (CJI),
+                вопросы и ответы (QUEST), формы документов (PAP), судебная (ARB)
+                и административная (AP) практика, картотека дел
+                (consultant_casecard). Основной авторитетный источник по
+                действующей редакции права и практике высших судов. 2.
+                lightrag-*, lightrag-law-*, lightrag-contracts-* — базы знаний
+                LightRAG (графовый RAG по документам пользователя): Основная
+                (9621), Законодательство (9622), Договоры (9623). lightrag_query
+                — вопрос к базе с ссылками на документы; lightrag_ingest_file /
+                lightrag_ingest_text — загрузка документа (возвращает track_id);
+                lightrag_track — прогресс индексирования; lightrag_status —
+                здоровье сервера; lightrag_documents — список документов;
+                lightrag_delete_document — удаление. 3. mcp__playwright__* —
+                браузер (headless Chrome): официальный портал правовой
+                информации pravo.gov.ru, картотека судебных актов sudact.ru,
+                consultant.ru и любые веб-источники. browser_navigate — переход
+                по URL, browser_snapshot — читаемая структура текущей страницы,
+                browser_click / browser_type — взаимодействие с элементами,
+                browser_take_screenshot — скриншот, browser_close — закрытие. 4.
+                mcp__markitdown__* — convert_to_markdown: переводит PDF, DOCX,
+                XLSX, PPTX, HTML, EPUB и URL в markdown. Чтение текста
+                документов, включая сканы (OCR).
+
+                Единый рабочий конвейер (выполняй шаги по порядку; шаг пропускай
+                только если задача явно его не требует): 1. Найти норму —
+                mcp__consultant__consultant_search (поиск по КонсультантПлюсу)
+                и/или lightrag-law_query (база «Законодательство»). Если
+                юридическая терминология вопроса неочевидна — сначала экспертные
+                материалы КонсультантПлюса (CJI). 2. Проверить актуальность и
+                официальный текст — mcp__consultant__consultant_doc (актуальная
+                систематизированная редакция, база LAW); официальные данные
+                опубликования (орган, даты, PDF, порядок вступления в силу) —
+                pravo.gov.ru через mcp__playwright__*. Текст PDF при
+                необходимости — mcp__markitdown__convert_to_markdown. 3. Понять
+                смысл и практику — комментарии и консультации (CJI, QUEST). По
+                спорным вопросам — судебная практика: картотека дел sudact.ru
+                (первичный источник, через mcp__playwright__*) и КонсультантПлюс
+                (картотека дел, базы ARB/AP, постановления КС РФ). 4. Собрать
+                позицию — lightrag_query по базам знаний + комментарии +
+                практика в одной аргументации. 5. Скорректно сослаться —
+                источник в КонсультантПлюсе (база/номер), ссылка на страницу
+                документа pravo.gov.ru, номер дела и ссылка на акт из картотеки,
+                ссылка на документ из базы знаний. Правовая позиция, которую
+                нельзя сверить по источникам, — не правовая позиция.
+
+                Правила противоречий: - «Какая редакция действует сейчас» —
+                актуальная систематизированная редакция КонсультантПлюса. - «Что
+                и когда официально опубликовано» — pravo.gov.ru (через браузер).
+                - Базы знаний (lightrag) — снапшот документов пользователя: при
+                расхождении с официальным источником действуй по официальному и
+                явно укажи расхождение. - «Как применять» — первичны
+                комментарии, консультации и практика, но всегда привязывай их к
+                актуальной редакции нормы.
+
+                Операционные правила источников: - КонсультантПлюс — одна
+                разделяемая сессия на всю машину (одна лицензия, запросы
+                сериализуются). Если вызов вернул «queued» — не открывай
+                параллельные запросы, просто повтори тот же вызов через короткий
+                интервал. consultant_logout не вызывай по собственной
+                инициативе; consultant_purge — только если
+                max_connections_reached держится долго и после сообщения об этом
+                пользователю. - Playwright — headless Chrome с изолированным
+                профилем; на pravo.gov.ru размер страницы (PageSize) принимает
+                10/30/100/200; после завершения работы закрывай браузер
+                (browser_close). - markitdown — для материалов дела,
+                представленных файлами, и URL; если документ опубликован как
+                скан (нет текстового слоя), читай через convert_to_markdown
+                (OCR) и укажи, что содержание сверялось по скану. - Черновики
+                судебных актов (определения, постановления, решения) пиши в
+                официально-деловом стиле с соблюдением структуры процессуального
+                документа и сохраняй файлом в рабочей директории с именем,
+                отражающим содержание. - Отвечай на русском языке. Если позиция
+                не может быть проверена ни через один из источников — прямо
+                скажи об этом и не выдумывай.
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: tool-schedule
+            name: '@deepseek-ai/dsh-tool-schedule'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('@deepseek-ai/dsh-agent-preset/package.json')),
+                  'skills')
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: planning
+            name: cordis:group
+            group: true
+            isolate:
+              planMode: true
+            config:
+              - id: plan-mode
+                name: '@deepseek-ai/dsh-plan-mode'
+                config:
+                  section: |
+                    You are in plan mode. Stay in plan mode until the user approves your plan through exit_plan_mode or switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+                    Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+                    The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+                    Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+                    Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+                    When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: delegation
+            name: cordis:group
+            group: true
+            isolate:
+              workflowEngine: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+                config:
+                  interrupt: false
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelection: true
+                  modelDiscovery: true
+              - id: tool-subagent-fork
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: fork
+                  toolName: subagent_fork
+              - id: workflow-ptc
+                name: '@deepseek-ai/dsh-workflow-ptc'
+                config:
+                  provider: spawn
+              - id: tool-workflow
+                name: '@deepseek-ai/dsh-tool-workflow'
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
+          - id: tool-office
+            name: '@deepseek-ai/dsh-tool-office'
+          - id: tool-plugin-manager
+            name: '@deepseek-ai/dsh-plugin-manager/tools'
+            disabled: !!js "!ctx.get('profileContext')"
